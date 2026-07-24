@@ -8,7 +8,10 @@ background; the original voice prompt is archived in `archive/`.
 ## Status
 
 M0 complete (scaffold, QR detect/redact/verify core, walking-skeleton GUI,
-tests). Next: **M1** — review UI, manual regions, crop, metadata
+tests). The GUI is **folder-driven**: a thumbnail sidebar is the primary
+navigation (open a folder — or an image, which opens its folder), with
+per-image state badges and an in-memory cache of redacted-but-unexported
+images. Next: **M1** — review UI, manual regions, crop, metadata
 audit/strip. Milestone table: spec §12.
 
 ## Commands

@@ -24,7 +24,11 @@ look for.
 
 ## What works today (M0)
 
-- Open an image or folder; scan for QR codes with an **engine stack**:
+- **Folder-driven workflow**: open a folder (opening a single image brings
+  its folder along) and click through a thumbnail sidebar. Per-image badges
+  track state — findings / clean / redacted / exported — and redactions are
+  held in memory until exported, so browsing never loses work.
+- Scan for QR codes with an **engine stack**:
   OpenCV's built-in detector plus
   [pyzbar](https://github.com/NaturalHistoryMuseum/pyzbar) — the engine
   behind [qrpyora-blur](https://github.com/Testausserveri/qrpyora-blur),
