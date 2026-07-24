@@ -9,6 +9,9 @@ dependencies = [
     "opencv-python>=4.9",
     "numpy>=1.26",
     "pillow>=10.0",
+    # zbar engine (as used by qrpyora-blur); needs system libzbar0 — the
+    # detector stack skips it cleanly if the shared library is missing.
+    "pyzbar>=0.1.9",
 ]
 
 [project.optional-dependencies]

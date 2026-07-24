@@ -1,12 +1,12 @@
 """Detector plugins.
 
-`default_detectors()` returns the best available engine for each detection
-class in the current environment (e.g. qreader-based QR detection when the
-qr-ml extra is installed, OpenCV otherwise).
+`default_detectors()` returns the default stack: every locally available
+engine per detection class, merged (see qr.QRDetectorStack). Cloud
+detectors are never included by default.
 """
 
-from image_sanitiser.detectors.qr import best_available
+from image_sanitiser.detectors.qr import QRDetectorStack
 
 
 def default_detectors():
-    return [best_available()]
+    return [QRDetectorStack()]

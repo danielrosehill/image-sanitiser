@@ -1,11 +1,18 @@
 """QR code detection.
 
-The default engine is OpenCV's built-in QRCodeDetector: zero extra
-dependencies, fine for clean frontal codes. The optional qreader engine
-(`pip install image-sanitiser[qr-ml]`) adds a YOLOv8-based detector that
-finds codes OpenCV misses — rotated, blurred, small, at an angle — at the
-cost of a torch dependency. If qreader is importable it is used
-automatically.
+Multiple engines run together and their findings are merged: for a
+redaction tool, more detectors mean more caught codes, so every engine
+available in the environment gets a vote.
+
+- OpenCV `QRCodeDetector` — always present (core dependency).
+- pyzbar (zbar) — the engine behind Testausserveri/qrpyora-blur, the tool
+  this project grew out of. Also catches 1-D barcodes. Needs the system
+  zbar library; skipped cleanly when missing.
+- qreader (YOLOv8) — optional `[qr-ml]` extra; best recall on rotated,
+  small, or damaged codes.
+
+Findings from different engines covering the same code are merged by bbox
+overlap, preferring the copy that carries a decoded payload.
 """
 
 from __future__ import annotations
@@ -18,7 +25,7 @@ from image_sanitiser.detectors.base import Detector
 
 
 class OpenCVQRDetector(Detector):
-    name = "qr"
+    name = "qr-opencv"
     kind = "local"
 
     def scan(self, image: np.ndarray) -> list[Finding]:
@@ -39,10 +46,47 @@ class OpenCVQRDetector(Detector):
         return findings
 
 
-def best_available() -> Detector:
-    try:
-        from image_sanitiser.detectors.qr_ml import QReaderDetector
+def _iou(a, b) -> float:
+    ax, ay, aw, ah = a
+    bx, by, bw, bh = b
+    ix = max(0, min(ax + aw, bx + bw) - max(ax, bx))
+    iy = max(0, min(ay + ah, by + bh) - max(ay, by))
+    inter = ix * iy
+    union = aw * ah + bw * bh - inter
+    return inter / union if union else 0.0
 
-        return QReaderDetector()
-    except ImportError:
-        return OpenCVQRDetector()
+
+class QRDetectorStack(Detector):
+    """Union of every available QR engine, deduplicated by overlap."""
+
+    name = "qr"
+    kind = "local"
+
+    def __init__(self):
+        self.engines: list[Detector] = [OpenCVQRDetector()]
+        try:
+            from image_sanitiser.detectors.qr_zbar import ZbarQRDetector
+
+            self.engines.append(ZbarQRDetector())
+        except ImportError:
+            pass
+        try:
+            from image_sanitiser.detectors.qr_ml import QReaderDetector
+
+            self.engines.append(QReaderDetector())
+        except ImportError:
+            pass
+
+    def scan(self, image: np.ndarray) -> list[Finding]:
+        merged: list[Finding] = []
+        for engine in self.engines:
+            for finding in engine.scan(image):
+                dup = next(
+                    (i for i, m in enumerate(merged) if _iou(m.bbox, finding.bbox) > 0.5),
+                    None,
+                )
+                if dup is None:
+                    merged.append(finding)
+                elif finding.payload and not merged[dup].payload:
+                    merged[dup] = finding
+        return merged

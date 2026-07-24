@@ -24,13 +24,20 @@ look for.
 
 ## What works today (M0)
 
-- Open an image or folder; scan for QR codes (OpenCV built-in, or
-  [qreader](https://github.com/Eric-Canas/QReader)'s YOLOv8 detector via the
-  `qr-ml` extra — auto-selected when installed); decoded payloads shown so
-  you can judge sensitivity.
-- Redact findings (pixelate/fill/blur with region padding); save a copy to
-  `redacted/` — originals are never touched, metadata is not carried over.
-- Verification primitive: re-scan the export; a still-decodable QR fails.
+- Open an image or folder; scan for QR codes with an **engine stack**:
+  OpenCV's built-in detector plus
+  [pyzbar](https://github.com/NaturalHistoryMuseum/pyzbar) — the engine
+  behind [qrpyora-blur](https://github.com/Testausserveri/qrpyora-blur),
+  which this app grows out of (and which catches 1-D barcodes too) — plus
+  [qreader](https://github.com/Eric-Canas/QReader)'s YOLOv8 detector via
+  the `qr-ml` extra. All available engines run and their findings merge;
+  decoded payloads are shown so you can judge sensitivity.
+- **Verified redaction**: apply pixelate/fill/blur, then re-scan the region
+  and auto-escalate (stronger blur → heavy pixelate → solid fill) until no
+  detector can read it. Copies save to `redacted/` — originals are never
+  touched, metadata is not carried over.
+- Export verification: the saved file is re-scanned; a still-readable code
+  fails loudly.
 
 Planned (spec §12): review checklist UI, manual regions + crop,
 before/after compare, threaded folder workflow, faces/OCR-PII/barcode
@@ -47,12 +54,17 @@ pytest              # verify the core promise holds on your machine
 image-sanitiser     # or: image-sanitiser ~/Pictures/to-publish/
 ```
 
+The zbar engine needs the system library on Debian/Ubuntu:
+`sudo apt install libzbar0` (the app runs without it, minus that engine).
+
 ## Design notes worth knowing
 
-- **Blur is cosmetic.** QR error correction survives 30% damage and
-  pixelated text is attackable, so machine-readable content defaults to
-  solid fill / heavy pixelation, and regions are padded 15% beyond the
-  detection box.
+- **No redaction is decorative.** QR error correction survives 30% damage
+  and pixelated text is attackable, so no method is trusted on its own:
+  every applied redaction is re-scanned and escalated (stronger blur →
+  pixelate → solid fill) until nothing machine-readable remains, with 15%
+  padding beyond the detection box. Erring on the side of caution is the
+  design rule, not a preference.
 - **Exports are re-encodes.** No EXIF, GPS, or embedded thumbnail (the
   classic leak: the unredacted original living on as the JPEG preview
   inside the "redacted" file) survives an export.

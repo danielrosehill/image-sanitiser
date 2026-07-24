@@ -4,11 +4,17 @@
   desktop first.
 - Python tooling is uv-only (no bare pip/venv) per the user's global
   conventions.
-- The user referenced a local Python QR-detection utility that "runs locally
-  and works beautifully" and wants it integrated. Best match: **qreader**
-  (YOLOv8 detection via qrdet + pyzbar decode). It is wired in as the
-  optional `[qr-ml]` extra and auto-selected when installed; the
-  dependency-free OpenCV detector is the default engine.
+- The QR utility the user was using (confirmed 2026-07-24) is
+  **Testausserveri/qrpyora-blur** (MIT): pyzbar detection/decoding +
+  polygon-mask Gaussian blur, with a `--data` filter to blur only codes
+  carrying a given payload. Its pyzbar engine is adopted into the default
+  detector stack; its fixed-strength blur is replaced by size-relative,
+  verified obfuscation. qreader (YOLOv8) remains available as the
+  `[qr-ml]` extra.
+- Design rule from the user (2026-07-24): blur must NOT be treated as
+  cosmetic — this app is for PII protection; err on the side of caution
+  and make sure redacted content is not readable. Implemented as the
+  verified escalation ladder in `core/pipeline.py`.
 - Google Cloud Vision integration is desired as an optional cloud toolkit;
   the user has an existing Google Cloud/Workspace footprint. Must remain
   opt-in per scan (privacy irony of uploading unredacted images).

@@ -22,9 +22,15 @@ workflow. The neighbours:
 | Metadata Cleaner / ExifCleaner | Strips file metadata | Pixels untouched |
 | deface (CLI) | Automatic face anonymisation | Faces only, no GUI, no review |
 | AutoRedact (browser) | Auto-detects sensitive info client-side | Browser-based, no folder workflow |
+| [qrpyora-blur](https://github.com/Testausserveri/qrpyora-blur) (Testausserveri, MIT) | pyzbar-detects QR codes, blurs them through a polygon mask | QR only, fixed 43-px blur kernel (a large code can survive it), no verification |
 
 The gap this app fills: **detection-assisted review of whole folders, with a
 verification pass that proves the redaction worked.**
+
+qrpyora-blur is this app's direct ancestor — it is the utility Daniel was
+using for QR redaction. Its engine choice (pyzbar) is adopted wholesale into
+the detector stack; its fixed-strength blur is exactly the failure mode the
+verified-redaction rule in §5 is designed against.
 
 ## 2. The core loop
 
@@ -62,8 +68,8 @@ resumable reviews is a later milestone — see §12.)
 
 | Class | Engine | Notes |
 |---|---|---|
-| QR codes | OpenCV `QRCodeDetector` built in; **qreader** (YOLOv8) via `[qr-ml]` extra | qreader finds rotated/small/damaged codes OpenCV misses; auto-selected when installed. Decoded payload is shown in the review UI so you can judge sensitivity ("this QR opens a WhatsApp chat with your number"). |
-| Barcodes | zxing-cpp (multi-format) | M4 |
+| QR codes | Engine stack, merged: OpenCV `QRCodeDetector` + **pyzbar** (zbar — the qrpyora-blur engine) + **qreader** (YOLOv8) via `[qr-ml]` extra | Every available engine runs and findings are overlap-merged — more engines, more caught codes. Decoded payload is shown in the review UI so you can judge sensitivity ("this QR opens a WhatsApp chat with your number"). |
+| Barcodes | pyzbar (already active in the stack); zxing-cpp for more formats | pyzbar catches common 1-D codes today; zxing-cpp lands M4 |
 | Faces | YuNet ONNX via OpenCV | M4. Small, fast, no torch. |
 | Text → PII | Tesseract OCR word boxes + pattern pass | M4. Patterns: emails, phone numbers (incl. IL formats), URLs, IBAN, credit cards (Luhn), Israeli ID numbers (checksum-validated). Each matching word box becomes a finding. |
 | Metadata audit | Pillow/exiv2 | M1. GPS coords, camera serial, embedded thumbnail presence → findings without regions, resolved by the export-time strip. |
@@ -98,19 +104,30 @@ in the environment.
 
 ## 5. Obfuscation
 
-| Method | Use | Trust |
-|---|---|---|
-| `fill` | Solid rectangle | The only method that provably destroys information |
-| `pixelate` | Mosaic to N blocks | Good default; block count must be small (≤8 across) |
-| `blur` | Gaussian, size-relative strength | **Cosmetic.** Fine for faces-as-courtesy; never sufficient for QR/text |
-| `inpaint` | Content-aware removal (cv2.inpaint) | M4; cosmetic, for unobtrusive edits |
+**No obfuscation method is decorative.** This is PII protection: whatever
+method the reviewer picks, the applied result must end up machine-unreadable
+— enforced by the escalation ladder below, not by trusting the method.
 
+| Method | What it does | Notes |
+|---|---|---|
+| `fill` | Solid rectangle | Destroys information outright; the escalation endpoint |
+| `pixelate` | Mosaic to N blocks | Block count kept small (≤8 across the region) |
+| `blur` | Gaussian, size-relative strength | Default is deliberately heavy — the kernel scales with the region, so big codes get big kernels (qrpyora-blur's fixed 43-px kernel is the cautionary tale this avoids) |
+| `inpaint` | Content-aware removal (cv2.inpaint) | M4; unobtrusive edits, held to the same verification bar |
+
+- **Verified redaction (implemented — `core/pipeline.py`):** apply the
+  chosen method → re-scan the region with the active detectors → if
+  anything still detects or decodes, escalate: stronger blur → heavy
+  pixelate → `fill` → `fill` with extra padding. The reviewer's choice sets
+  the aesthetic; the ladder guarantees the outcome. A region that somehow
+  survives the full ladder is surfaced as a loud failure, never exported
+  silently.
 - Every method expands the region by a **padding** fraction (default 15%) —
-  tight crops leave decodable quiet-zone modules around QR codes.
-- Per-class defaults: QR/barcode → `fill` or heavy `pixelate` (QR error
-  correction level H survives 30% damage — partial blur is not redaction);
-  text/PII → `fill`; faces → `pixelate` or `blur` with a "cosmetic only"
-  hint.
+  tight crops leave decodable quiet-zone modules around QR codes, and QR
+  error correction level H survives 30% damage.
+- Per-class starting defaults: QR/barcode/text → `fill` or heavy
+  `pixelate`; faces → `pixelate` or `blur`. Every class ends verified
+  regardless of the starting method.
 - Manual region tools: rectangle and ellipse (M1), freehand brush blur (M4),
   crop (M1).
 - **Reduction** (export options, M2): downscale to max dimension, JPEG
@@ -132,6 +149,9 @@ Exported ✓verified`.
 - Before/after: hold **Space** to peek at the original; split-slider view.
 - Keyboard-first: `J/K` next/prev image, `A` accept, `X` dismiss,
   `M` cycle method, `E` export.
+- Bulk actions by payload: accept or dismiss every finding whose decoded
+  payload matches a pattern (idea inherited from qrpyora-blur's `--data`
+  filter).
 - Batch export is gated on all images being `Reviewed` (override with warning).
 
 ## 7. Verification pass — the differentiator
@@ -140,8 +160,8 @@ After export, re-scan the **exported file** (not the in-memory buffer):
 
 - Run every detector that produced an accepted finding, plus a full QR sweep.
 - Any decode or detection overlapping a redacted region ⇒ **FAIL**: the image
-  loses its verified badge and the app offers escalation (method → `fill`,
-  padding +50%, re-export).
+  loses its verified badge and the app re-runs the §5 escalation ladder on
+  the failing region, then re-exports.
 - Findings the reviewer dismissed are excluded from failure matching.
 - Metadata check: exported file must carry zero EXIF/XMP/IPTC and no embedded
   thumbnail (a classic leak: the original survives as a JPEG preview inside

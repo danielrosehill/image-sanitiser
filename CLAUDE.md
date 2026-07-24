@@ -27,13 +27,18 @@ image-sanitiser [path]       # run the app (optionally on an image/folder)
   as full re-encodes with metadata stripped.
 - Every redaction feature lands with a *defeats-detection* test
   (pattern: `tests/test_qr_pipeline.py::test_redaction_defeats_decoding`).
-- Blur is cosmetic: never a default for machine-readable content (QR,
-  text). Defaults live in spec §5.
+- No obfuscation is decorative — this is PII protection; err on the side
+  of caution. Every applied redaction goes through
+  `core/pipeline.redact_verified`: re-scan the region and escalate
+  (stronger blur → pixelate → fill) until unreadable; failures surface
+  loudly. Defaults live in spec §5.
 - Cloud detectors (Google Cloud Vision) are opt-in per scan with a consent
   dialog — never a remembered default.
 
 ## Stack
 
-Python ≥3.10 (dev on 3.12), PySide6, OpenCV, numpy, Pillow. Optional
+Python ≥3.10 (dev on 3.12), PySide6, OpenCV, numpy, Pillow, pyzbar
+(system dep: libzbar0). QR scanning is an engine stack (OpenCV + zbar +
+optional qreader), findings overlap-merged. Optional
 extras: `[qr-ml]` qreader (YOLOv8 QR detection, auto-selected when
 installed), `[ocr]`, `[gcv]`. Packaging target: `.deb` (M6).

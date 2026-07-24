@@ -24,7 +24,7 @@ def _clamp_box(img: np.ndarray, x: int, y: int, w: int, h: int, padding: float):
 
 
 def fill(img, box, color=(0, 0, 0), padding=DEFAULT_PADDING):
-    """Solid rectangle. The only method that provably destroys information."""
+    """Solid rectangle. Destroys information outright — the escalation endpoint."""
     out = img.copy()
     x0, y0, x1, y1 = _clamp_box(out, *box, padding)
     cv2.rectangle(out, (x0, y0), (x1, y1), color, thickness=-1)
@@ -49,8 +49,10 @@ def pixelate(img, box, blocks=6, padding=DEFAULT_PADDING):
 def blur(img, box, strength=0.5, padding=DEFAULT_PADDING):
     """Gaussian blur; kernel scales with region size so strength is size-independent.
 
-    Blur is cosmetic. For machine-readable content (QR codes, text) prefer
-    fill or pixelate — see spec/starter.md §7.
+    The default is deliberately heavy: this is a redaction tool, and a blur
+    that leaves content readable is a failure. The verified-redaction
+    pipeline (core/pipeline.py) re-scans every region and escalates if any
+    detector can still read it.
     """
     out = img.copy()
     x0, y0, x1, y1 = _clamp_box(out, *box, padding)

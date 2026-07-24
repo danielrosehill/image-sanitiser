@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
     QToolBar,
 )
 
-from image_sanitiser.core import redact
+from image_sanitiser.core import pipeline
 from image_sanitiser.detectors import default_detectors
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
@@ -154,11 +154,26 @@ class MainWindow(QMainWindow):
         if self.working is None or not self.findings:
             self.statusBar().showMessage("Nothing to redact — run Scan first")
             return
+        escalated = 0
+        unresolved = 0
         for finding in self.findings:
-            self.working = redact.apply(self.working, finding, method="pixelate")
+            result = pipeline.redact_verified(
+                self.working, finding, self.detectors, method="pixelate"
+            )
+            self.working = result.image
+            escalated += result.escalated
+            unresolved += not result.clean
         count = len(self.findings)
         self.findings = []
-        self.statusBar().showMessage(f"Redacted {count} region(s) — Save Copy to export")
+        message = f"Redacted {count} region(s), verified unreadable"
+        if escalated:
+            message += f" ({escalated} escalated)"
+        if unresolved:
+            message = (
+                f"WARNING: {unresolved} of {count} region(s) still detectable "
+                "after full escalation"
+            )
+        self.statusBar().showMessage(f"{message} — Save Copy to export")
         self._refresh()
 
     def save_copy(self):
