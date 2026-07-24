@@ -43,7 +43,20 @@ Planned (spec §12): review checklist UI, manual regions + crop,
 before/after compare, threaded folder workflow, faces/OCR-PII/barcode
 detectors, opt-in Google Cloud Vision, `.deb` packaging.
 
-## Run it
+## Install (Ubuntu/Debian)
+
+Grab the `.deb` from the
+[latest release](https://github.com/danielrosehill/image-sanitiser/releases/latest):
+
+```bash
+sudo apt install ./image-sanitiser_*_all.deb
+```
+
+Dependencies (PySide6, OpenCV, zbar) come from the Ubuntu archive. Launch
+**Image Sanitiser** from the menu, or `image-sanitiser [image-or-folder]`.
+To build the package yourself: `./build-deb.sh`.
+
+## Run from source
 
 ```bash
 git clone https://github.com/danielrosehill/image-sanitiser

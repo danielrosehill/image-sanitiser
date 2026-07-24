@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QToolBar,
 )
 
+from image_sanitiser import __version__
 from image_sanitiser.core import pipeline
 from image_sanitiser.detectors import default_detectors
 
@@ -204,6 +205,9 @@ class MainWindow(QMainWindow):
 
 
 def main() -> int:
+    if "--version" in sys.argv[1:]:
+        print(f"image-sanitiser {__version__}")
+        return 0
     app = QApplication(sys.argv)
     window = MainWindow()
     for arg in sys.argv[1:]:
